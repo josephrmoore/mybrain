@@ -1,0 +1,21 @@
+# Core Shell config
+# Hand-edit this file to add silo-specific categories and settings.
+# Modules read this through the shared config loader (config.py) —
+# modules should never parse this file directly.
+
+silos: {}
+
+# Registered modules. Each entry declares what input it claims and how
+# it's handled. Example (not active until you uncomment and edit it):
+#
+# modules:
+#   - name: file_organizer
+#     silo: general
+#     handler_type: bash        # bash | hazel | local-llm | api
+#     handler: modules/file_organizer/run.sh
+#     claims:
+#       file_extension: [".pdf", ".docx"]
+#       keyword: ["invoice", "receipt"]
+#       folder: ["~/Desktop/inbox"]
+#       event: []
+modules: []
