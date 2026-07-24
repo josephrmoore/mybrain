@@ -13,13 +13,31 @@ fi
 
 source venv/bin/activate
 
-echo "Checking dependencies..."
-if ! pip install --quiet flask pyyaml keyring anthropic requests; then
-    echo ""
-    echo "ERROR: dependency install failed. Check your internet connection and try again."
-    echo "Press any key to close this window."
-    read -n 1
-    exit 1
+DEPS="flask pyyaml keyring anthropic requests"
+DEPS_HASH=$(echo "$DEPS" | shasum | cut -d' ' -f1)
+DEPS_MARKER="venv/.deps_installed"
+
+NEED_INSTALL=true
+if [ -f "$DEPS_MARKER" ] && [ "$(cat "$DEPS_MARKER")" = "$DEPS_HASH" ]; then
+    if python3 -c "import flask, yaml, keyring, anthropic, requests" 2>/dev/null; then
+        NEED_INSTALL=false
+    else
+        echo "Dependency marker looked current, but a package isn't actually importable — reinstalling."
+    fi
+fi
+
+if [ "$NEED_INSTALL" = true ]; then
+    echo "Checking dependencies..."
+    if ! pip install --quiet $DEPS; then
+        echo ""
+        echo "ERROR: dependency install failed. Check your internet connection and try again."
+        echo "Press any key to close this window."
+        read -n 1
+        exit 1
+    fi
+    echo "$DEPS_HASH" > "$DEPS_MARKER"
+else
+    echo "Dependencies already verified — skipping check."
 fi
 
 echo "Starting Core Shell..."

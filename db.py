@@ -2,9 +2,10 @@ import sqlite3
 import json
 import os
 import shutil
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from paths import BASE_DIR
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "core.db")
 MIGRATIONS_DIR = os.path.join(BASE_DIR, "migrations")
 BACKUPS_DIR = os.path.join(BASE_DIR, "backups")
@@ -17,6 +18,25 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+@contextmanager
+def db_connection():
+    """
+    The single connection-handling pattern every function below uses:
+    commits on success, rolls back and re-raises on any error, always
+    closes. Replaces the previous per-function open/commit/close code,
+    where only one function (link_entries) actually rolled back on error.
+    """
+    conn = get_connection()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def run_migrations():
@@ -54,22 +74,27 @@ def run_migrations():
 
 
 def backup_on_launch():
-    """Copies the DB file (if it exists) into backups/ with a timestamped name, then prunes to the last MAX_BACKUPS."""
+    """Copies the DB file (if it exists) into backups/ with a timestamped name, then prunes to the last MAX_BACKUPS.
+    A failure here is logged clearly but does not prevent the app from starting — losing the ability to
+    back up shouldn't also mean losing the ability to use the app to go fix whatever caused it."""
     if not os.path.exists(DB_PATH):
         return  # nothing to back up on a fresh install
 
-    os.makedirs(BACKUPS_DIR, exist_ok=True)
+    try:
+        os.makedirs(BACKUPS_DIR, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_path = os.path.join(BACKUPS_DIR, f"core-{timestamp}.db")
-    shutil.copy2(DB_PATH, backup_path)
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = os.path.join(BACKUPS_DIR, f"core-{timestamp}.db")
+        shutil.copy2(DB_PATH, backup_path)
 
-    backups = sorted(
-        f for f in os.listdir(BACKUPS_DIR) if f.startswith("core-") and f.endswith(".db")
-    )
-    while len(backups) > MAX_BACKUPS:
-        oldest = backups.pop(0)
-        os.remove(os.path.join(BACKUPS_DIR, oldest))
+        backups = sorted(
+            f for f in os.listdir(BACKUPS_DIR) if f.startswith("core-") and f.endswith(".db")
+        )
+        while len(backups) > MAX_BACKUPS:
+            oldest = backups.pop(0)
+            os.remove(os.path.join(BACKUPS_DIR, oldest))
+    except OSError as e:
+        print(f"[db] WARNING: backup failed, continuing startup without a fresh backup: {e}")
 
 
 def _generate_id(conn):
@@ -90,8 +115,7 @@ def create_entry(silo, raw_text, taxonomy_stage, tags=None, metadata=None):
     tags = [t.strip().lower() for t in (tags or [])]
     metadata = metadata or {}
 
-    conn = get_connection()
-    try:
+    with db_connection() as conn:
         entry_id = _generate_id(conn)
         created_at = datetime.now(timezone.utc).isoformat()
         conn.execute(
@@ -102,15 +126,11 @@ def create_entry(silo, raw_text, taxonomy_stage, tags=None, metadata=None):
             """,
             (entry_id, created_at, silo, raw_text, taxonomy_stage, json.dumps(tags), json.dumps([]), json.dumps(metadata)),
         )
-        conn.commit()
         return entry_id
-    finally:
-        conn.close()
 
 
 def get_entry(entry_id):
-    conn = get_connection()
-    try:
+    with db_connection() as conn:
         row = conn.execute("SELECT * FROM entries WHERE id = ?", (entry_id,)).fetchone()
         if row is None:
             return None
@@ -120,23 +140,16 @@ def get_entry(entry_id):
         entry["metadata"] = json.loads(entry["metadata"])
         entry["is_deleted"] = bool(entry["is_deleted"])
         return entry
-    finally:
-        conn.close()
 
 
 def soft_delete_entry(entry_id):
-    conn = get_connection()
-    try:
+    with db_connection() as conn:
         conn.execute("UPDATE entries SET is_deleted = 1 WHERE id = ?", (entry_id,))
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def link_entries(id_a, id_b):
     """Writes each entry's id into the other's related_ids, in one transaction."""
-    conn = get_connection()
-    try:
+    with db_connection() as conn:
         row_a = conn.execute("SELECT related_ids FROM entries WHERE id = ?", (id_a,)).fetchone()
         row_b = conn.execute("SELECT related_ids FROM entries WHERE id = ?", (id_b,)).fetchone()
         if row_a is None or row_b is None:
@@ -152,9 +165,3 @@ def link_entries(id_a, id_b):
 
         conn.execute("UPDATE entries SET related_ids = ? WHERE id = ?", (json.dumps(related_a), id_a))
         conn.execute("UPDATE entries SET related_ids = ? WHERE id = ?", (json.dumps(related_b), id_b))
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()

@@ -21,7 +21,11 @@ def escalate(rule_fn=None, llm_prompt=None, context=None):
     human review" means in its own context (e.g. quarantine a file).
     """
     if rule_fn:
-        rule_result = rule_fn()
+        try:
+            rule_result = rule_fn()
+        except Exception as e:
+            print(f"[router] rule_fn raised an error, treating as inconclusive and falling through: {e}")
+            rule_result = None
         if rule_result is not None:
             _log_decision(context, "rule", rule_result)
             return {"result": rule_result, "decided_by": "rule"}

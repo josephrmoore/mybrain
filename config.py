@@ -1,7 +1,8 @@
 import os
 import yaml
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from paths import BASE_DIR
+
 CONFIG_PATH = os.path.join(BASE_DIR, "config.yaml")
 
 DEFAULT_CONFIG = {
@@ -49,6 +50,9 @@ def load_config():
             data = yaml.safe_load(f)
         if data is None:
             data = {}
+        if not isinstance(data, dict):
+            print(f"WARNING: config.yaml did not parse as a mapping (got {type(data).__name__} instead), using safe defaults instead.")
+            return dict(DEFAULT_CONFIG)
         return data
     except yaml.YAMLError as e:
         print(f"WARNING: config.yaml is malformed, using safe defaults instead. Error: {e}")

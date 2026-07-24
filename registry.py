@@ -3,7 +3,14 @@ import config
 
 def _get_modules():
     cfg = config.load_config()
-    return cfg.get("modules", []) or []
+    modules = cfg.get("modules", []) or []
+    valid_modules = []
+    for m in modules:
+        if isinstance(m, dict):
+            valid_modules.append(m)
+        else:
+            print(f"[registry] Skipping malformed module entry (not a mapping): {m!r}")
+    return valid_modules
 
 
 def list_modules():
