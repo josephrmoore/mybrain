@@ -21,11 +21,20 @@ silos: {}
 # Registered modules. Each entry declares what input it claims and how
 # it's handled. Example (not active until you uncomment and edit it):
 #
+# handler_type describes WHERE a module's decision is made — this maps
+# onto the same escalation ladder the router uses: local (deterministic
+# code you wrote), local_llm (a prompt, no code needed), or api (a
+# prompt sent to Claude, no code needed).
+#
+# handler_mechanism only applies when handler_type is 'local' — it says
+# HOW that local code actually runs: bash | python | hazel.
+#
 # modules:
 #   - name: file_organizer
 #     silo: general
-#     handler_type: bash        # bash | hazel | local-llm | api
-#     handler: modules/file_organizer/run.sh
+#     handler_type: local            # local | local_llm | api
+#     handler_mechanism: python      # bash | python | hazel (only used when handler_type is 'local')
+#     handler: file_organizer.organize_file
 #     claims:
 #       file_extension: [".pdf", ".docx"]
 #       keyword: ["invoice", "receipt"]
