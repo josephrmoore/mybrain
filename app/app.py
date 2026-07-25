@@ -2,6 +2,7 @@ from flask import Flask
 import db
 import config
 import credentials
+import watcher
 
 app = Flask(__name__)
 
@@ -24,6 +25,8 @@ if __name__ == "__main__":
             print("Anthropic API key: configured.")
         else:
             print("Anthropic API key: not set — modules will run in no-key mode until you run set_credential.py.")
+
+        active_watchers = watcher.start_watchers()
     except Exception as e:
         print()
         print(f"FATAL: Core Shell failed to start up: {e}")

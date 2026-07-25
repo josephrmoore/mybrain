@@ -15,10 +15,14 @@ def escalate(rule_fn=None, llm_prompt=None, context=None):
     context: optional short string describing what's being decided, used
         only for the event log (e.g. "classify file: report.pdf").
 
-    Returns {"result": ..., "decided_by": "rule" | "local_llm" | "api" | "human_review"}.
-    A result of None with decided_by "human_review" means nothing in the
-    ladder could resolve it — the calling module decides what "needs
-    human review" means in its own context (e.g. quarantine a file).
+    Returns {"result": ..., "decided_by": "local" | "local_llm" | "api" | "human"}.
+    "decided_by" deliberately uses the same vocabulary as a module's
+    handler_type — both describe the same four-way idea (where did this
+    answer come from), just at different scopes: handler_type is a
+    per-module registration fact, decided_by is a per-call runtime fact.
+    A result of None with decided_by "human" means nothing in the ladder
+    could resolve it — the calling module decides what "needs human
+    review" means in its own context (e.g. quarantine a file).
     """
     if rule_fn:
         try:
@@ -27,8 +31,8 @@ def escalate(rule_fn=None, llm_prompt=None, context=None):
             print(f"[router] rule_fn raised an error, treating as inconclusive and falling through: {e}")
             rule_result = None
         if rule_result is not None:
-            _log_decision(context, "rule", rule_result)
-            return {"result": rule_result, "decided_by": "rule"}
+            _log_decision(context, "local", rule_result)
+            return {"result": rule_result, "decided_by": "local"}
 
     if llm_prompt:
         local_result = local_llm.call(llm_prompt)
@@ -41,8 +45,8 @@ def escalate(rule_fn=None, llm_prompt=None, context=None):
             _log_decision(context, "api", api_result)
             return {"result": api_result, "decided_by": "api"}
 
-    _log_decision(context, "human_review", None)
-    return {"result": None, "decided_by": "human_review"}
+    _log_decision(context, "human", None)
+    return {"result": None, "decided_by": "human"}
 
 
 def _log_decision(context, decided_by, result):

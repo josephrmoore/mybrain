@@ -18,11 +18,11 @@ def list_modules():
     return _get_modules()
 
 
-def find_modules_for(file_extension=None, keyword=None, folder=None, event=None):
+def find_modules_for_file(file_extension=None, keyword=None, folder=None):
     """
     Returns the list of registered modules whose 'claims' match any of the
-    given criteria. An empty list is a normal, expected outcome — it means
-    no module is registered to handle this input yet, not an error.
+    given file properties (extension, keyword, or folder). An empty list
+    is a normal, expected outcome — no module registered for this input yet.
     """
     matches = []
     for module in _get_modules():
@@ -37,8 +37,20 @@ def find_modules_for(file_extension=None, keyword=None, folder=None, event=None)
         if folder and folder in (claims.get("folder") or []):
             matches.append(module)
             continue
-        if event and event in (claims.get("event") or []):
+
+    return matches
+
+
+def find_modules_for_event(event):
+    """
+    Returns the list of registered modules subscribed to the given event
+    name. This is a different kind of match than find_modules_for_file —
+    an event is a signal from the event bus, not a property of a file.
+    """
+    matches = []
+    for module in _get_modules():
+        claims = module.get("claims") or {}
+        if event in (claims.get("event") or []):
             matches.append(module)
-            continue
 
     return matches

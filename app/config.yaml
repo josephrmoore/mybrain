@@ -5,26 +5,38 @@
 
 silos: {}
 
-# Registered modules. Each entry declares what input it claims and how
-# it's handled. Example (not active until you uncomment and edit it):
-#
-# handler_type describes WHERE a module's decision is made — this maps
-# onto the same escalation ladder the router uses: local (deterministic
-# code you wrote), local_llm (a prompt, no code needed), or api (a
-# prompt sent to Claude, no code needed).
-#
-# handler_mechanism only applies when handler_type is 'local' — it says
-# HOW that local code actually runs: bash | python | hazel.
-#
-# modules:
-#   - name: file_organizer
-#     silo: general
-#     handler_type: local            # local | local_llm | api
-#     handler_mechanism: python      # bash | python | hazel (only used when handler_type is 'local')
-#     handler: file_organizer.organize_file
-#     claims:
-#       file_extension: [".pdf", ".docx"]
-#       keyword: ["invoice", "receipt"]
-#       folder: ["~/Desktop/inbox"]
-#       event: []
-modules: []
+modules:
+  - name: file_organizer
+    silo: general
+    handler_type: local
+    handler_mechanism: python
+    handler: file_organizer.organize_file
+    claims:
+      file_extension: [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt", ".pages", ".md", ".tex",
+                        ".xls", ".xlsx", ".csv", ".numbers", ".ods",
+                        ".ppt", ".pptx", ".key", ".odp",
+                        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".svg", ".webp", ".heic", ".raw", ".psd",
+                        ".mp3", ".wav", ".aac", ".flac", ".m4a", ".ogg", ".wma", ".aiff",
+                        ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v",
+                        ".zip", ".rar", ".7z", ".tar", ".gz", ".dmg"]
+      keyword: []
+      folder: ["~/SORTTEST/inbox"]
+      event: []
+    rules:
+      base_folder: "~/SORTTEST/sorted"
+      needs_review_folder: "~/SORTTEST/needs_review"
+      categories:
+        - name: Documents
+          extensions: [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt", ".pages", ".md", ".tex"]
+        - name: Spreadsheets
+          extensions: [".xls", ".xlsx", ".csv", ".numbers", ".ods"]
+        - name: Presentations
+          extensions: [".ppt", ".pptx", ".key", ".odp"]
+        - name: Images
+          extensions: [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".svg", ".webp", ".heic", ".raw", ".psd"]
+        - name: Audio
+          extensions: [".mp3", ".wav", ".aac", ".flac", ".m4a", ".ogg", ".wma", ".aiff"]
+        - name: Video
+          extensions: [".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v"]
+        - name: Archives
+          extensions: [".zip", ".rar", ".7z", ".tar", ".gz", ".dmg"]

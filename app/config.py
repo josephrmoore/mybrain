@@ -22,9 +22,12 @@ silos: {}
 # it's handled. Example (not active until you uncomment and edit it):
 #
 # handler_type describes WHERE a module's decision is made — this maps
-# onto the same escalation ladder the router uses: local (deterministic
-# code you wrote), local_llm (a prompt, no code needed), or api (a
-# prompt sent to Claude, no code needed).
+# onto the same four-way vocabulary the router's escalation ladder uses:
+# local (deterministic code you wrote), local_llm (a prompt, no code
+# needed), api (a prompt sent to Claude, no code needed), or human (no
+# automation at all — always queued for manual review). Only local is
+# actually dispatched today; local_llm, api, and human are reserved for
+# when a module needs them.
 #
 # handler_mechanism only applies when handler_type is 'local' — it says
 # HOW that local code actually runs: bash | python | hazel.

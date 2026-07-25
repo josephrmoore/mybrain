@@ -4,6 +4,7 @@ from datetime import datetime
 
 import config as core_config
 import events
+import router
 
 
 def load_rules():
@@ -11,7 +12,9 @@ def load_rules():
     cfg = core_config.load_config()
     for module in cfg.get("modules", []) or []:
         if isinstance(module, dict) and module.get("name") == "file_organizer":
-            return module.get("rules", {}) or {}
+            rules = module.get("rules", {}) or {}
+            validate_categories(rules.get("categories", []))
+            return rules
     return {}
 
 
@@ -36,19 +39,37 @@ def find_category(filename, categories):
     return None
 
 
-def resolve_destination(path, rules):
-    """Returns the category/date destination folder for a file, or None
-    if no configured category matches its extension."""
-    filename = os.path.basename(path)
-    category = find_category(filename, rules.get("categories", []))
-    if category is None:
-        return None
+def validate_categories(categories):
+    """
+    Checks for the same extension listed in more than one category.
+    find_category() silently picks whichever category comes first in
+    the list when this happens, so this makes that risk visible instead
+    of leaving it as a silent, hard-to-notice misconfiguration. Returns
+    a dict of {extension: [category names it appears in]} for every
+    extension that's duplicated — empty if there are no duplicates.
+    """
+    seen = {}
+    for cat in categories:
+        for ext in cat.get("extensions", []):
+            ext = ext.lower()
+            seen.setdefault(ext, []).append(cat.get("name", "unnamed"))
 
-    creation_date = get_creation_date(path)
-    date_folder = creation_date.strftime("%Y-%m")
+    duplicates = {ext: names for ext, names in seen.items() if len(names) > 1}
+    if duplicates:
+        for ext, names in duplicates.items():
+            print(f"[file_organizer] WARNING: '{ext}' appears in multiple categories {names} — "
+                  f"'{names[0]}' will always win, the others never will.")
+    return duplicates
 
-    base_folder = os.path.expanduser(rules["base_folder"])
-    return os.path.join(base_folder, category, date_folder)
+
+def build_classification_prompt(filename, category_names):
+    """The prompt sent to local/API models for the fuzzy fallback. Uses
+    only the filename — reading actual file contents is a separate,
+    bigger decision (privacy, binary handling) not part of this pass."""
+    return (
+        f"Given only the filename '{filename}', which of these categories fits best: "
+        f"{', '.join(category_names)}? Reply with ONLY the category name, nothing else."
+    )
 
 
 def unique_destination_path(dest_folder, filename):
@@ -66,14 +87,12 @@ def unique_destination_path(dest_folder, filename):
 
 def organize_file(path, rules=None):
     """
-    Organizes a single file: moves it to its category/date destination
-    if a rule matches, or to needs_review if nothing matches. Never
-    deletes, never overwrites. Emits a 'file_processed' event either way.
-    Returns {"source", "destination", "matched"}.
-
-    rules defaults to this module's own config entry if not given —
-    this is what lets a generic loader invoke this function knowing
-    nothing about file_organizer's specific configuration shape.
+    Organizes a single file. Every file goes through the same router
+    escalation: deterministic extension match first, then a fuzzy
+    filename-based guess (local LLM, then API) if no rule matched, then
+    needs_review if nothing resolved it. Never deletes, never overwrites.
+    Emits a 'file_processed' event either way.
+    Returns {"source", "destination", "matched", "decided_by"}.
     """
     if rules is None:
         rules = load_rules()
@@ -82,16 +101,42 @@ def organize_file(path, rules=None):
         raise ValueError(f"Not a file: {path}")
 
     filename = os.path.basename(path)
-    dest_folder = resolve_destination(path, rules)
-    matched = dest_folder is not None
+    categories = rules.get("categories", [])
+    category_names = [c["name"] for c in categories]
 
-    if not matched:
+    decision = router.escalate(
+        rule_fn=lambda: find_category(filename, categories),
+        llm_prompt=build_classification_prompt(filename, category_names) if category_names else None,
+        context=f"classify file: {filename}",
+    )
+
+    guessed = decision["result"]
+    decided_by = decision["decided_by"]
+
+    if decided_by == "local":
+        category = guessed  # came straight from find_category, already trustworthy by construction
+    elif decided_by in ("local_llm", "api") and guessed and guessed.strip() in category_names:
+        category = guessed.strip()
+    else:
+        # either genuinely unresolved, or a model guessed something not in
+        # our configured categories — both cases mean needs_review from here
+        category = None
+        decided_by = "human"
+
+    if category is not None:
+        creation_date = get_creation_date(path)
+        date_folder = creation_date.strftime("%Y-%m")
+        base_folder = os.path.expanduser(rules["base_folder"])
+        dest_folder = os.path.join(base_folder, category, date_folder)
+        matched = True
+    else:
         dest_folder = os.path.expanduser(rules["needs_review_folder"])
+        matched = False
 
     dest_path = unique_destination_path(dest_folder, filename)
     shutil.move(path, dest_path)
 
-    result = {"source": path, "destination": dest_path, "matched": matched}
+    result = {"source": path, "destination": dest_path, "matched": matched, "decided_by": decided_by}
     events.emit("file_processed", result)
     return result
 
