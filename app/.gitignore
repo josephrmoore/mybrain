@@ -1,0 +1,13 @@
+# Runtime-generated — created fresh by the app, never part of source
+core.db
+config.yaml
+events.log
+backups/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

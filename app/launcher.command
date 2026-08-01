@@ -13,13 +13,13 @@ fi
 
 source venv/bin/activate
 
-DEPS="flask pyyaml keyring anthropic requests watchdog"
+DEPS="flask pyyaml keyring anthropic requests watchdog onnxruntime numpy soundfile"
 DEPS_HASH=$(echo "$DEPS" | shasum | cut -d' ' -f1)
 DEPS_MARKER="venv/.deps_installed"
 
 NEED_INSTALL=true
 if [ -f "$DEPS_MARKER" ] && [ "$(cat "$DEPS_MARKER")" = "$DEPS_HASH" ]; then
-    if python3 -c "import flask, yaml, keyring, anthropic, requests, watchdog" 2>/dev/null; then
+    if python3 -c "import flask, yaml, keyring, anthropic, requests, watchdog, onnxruntime, numpy, soundfile" 2>/dev/null; then
         NEED_INSTALL=false
     else
         echo "Dependency marker looked current, but a package isn't actually importable — reinstalling."
