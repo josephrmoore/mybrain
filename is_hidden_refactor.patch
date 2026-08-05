@@ -1,0 +1,94 @@
+From a9aeea12a42918bd423cb22c2811f0a068778aaa Mon Sep 17 00:00:00 2001
+From: josephrmoore <josephrmoore@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 06:05:21 +0000
+Subject: [PATCH] Extract file_utils.is_hidden(), replace 4 duplicate inline
+ checks
+
+file_organizer, dedup_finder, watcher, and ableton_scanner (not yet in
+this repo) each had their own copy of 'filename.startswith(".")' to
+skip dotfiles. Pulled into one function since it was genuinely
+identical logic everywhere, not forced into a shared 'walk a folder'
+abstraction -- the actual walk logic differs meaningfully per caller
+(recursive vs not, extension-filtered vs not, single-file vs batch)
+and forcing that into one function would trade real duplication for a
+worse, over-generalized coupling.
+
+Regression-tested against ableton_scanner's existing fixtures (real
+Live 9.5 file + corrupt-file + unrecognized-shape cases) -- identical
+output before and after.
+---
+ app/dedup_finder.py   | 2 +-
+ app/file_organizer.py | 2 +-
+ app/file_utils.py     | 8 ++++++++
+ app/watcher.py        | 3 ++-
+ 4 files changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/app/dedup_finder.py b/app/dedup_finder.py
+index ddb9b99..804db4d 100644
+--- a/app/dedup_finder.py
++++ b/app/dedup_finder.py
+@@ -36,7 +36,7 @@ def find_duplicates(folder_path):
+     size_groups = {}
+     for root, dirs, files in os.walk(folder_path):
+         for filename in files:
+-            if filename.startswith("."):
++            if file_utils.is_hidden(filename):
+                 continue
+             full_path = os.path.join(root, filename)
+             try:
+diff --git a/app/file_organizer.py b/app/file_organizer.py
+index 0d1b54b..1623314 100644
+--- a/app/file_organizer.py
++++ b/app/file_organizer.py
+@@ -130,7 +130,7 @@ def organize_folder(folder_path, rules=None):
+     folder_path = os.path.expanduser(folder_path)
+     results = []
+     for entry in sorted(os.listdir(folder_path)):
+-        if entry.startswith("."):
++        if file_utils.is_hidden(entry):
+             continue
+         full_path = os.path.join(folder_path, entry)
+         if not os.path.isfile(full_path):
+diff --git a/app/file_utils.py b/app/file_utils.py
+index 3066b98..3f9af63 100644
+--- a/app/file_utils.py
++++ b/app/file_utils.py
+@@ -2,6 +2,14 @@ import os
+ from datetime import datetime
+ 
+ 
++def is_hidden(filename):
++    """True for dotfiles (.DS_Store, .gitkeep, etc). The one piece of
++    filtering logic every folder-scanning module needs identically —
++    file_organizer, dedup_finder, watcher, and ableton_scanner each had
++    their own copy of this exact check before it was pulled here."""
++    return filename.startswith(".")
++
++
+ def get_creation_date(path):
+     """Returns a datetime for the file's creation date. Falls back to
+     modification time if creation time isn't tracked on this filesystem
+diff --git a/app/watcher.py b/app/watcher.py
+index 6ca9e0c..8619d96 100644
+--- a/app/watcher.py
++++ b/app/watcher.py
+@@ -5,6 +5,7 @@ from watchdog.events import FileSystemEventHandler
+ import registry
+ import module_loader
+ import config as core_config
++import file_utils
+ 
+ 
+ class _ModuleDispatchHandler(FileSystemEventHandler):
+@@ -20,7 +21,7 @@ class _ModuleDispatchHandler(FileSystemEventHandler):
+ 
+     def _dispatch(self, path):
+         filename = os.path.basename(path)
+-        if filename.startswith("."):
++        if file_utils.is_hidden(filename):
+             return  # ignore hidden files, same convention as organize_folder
+         ext = os.path.splitext(filename)[1]
+         matches = registry.find_modules_for_file(file_extension=ext)
+-- 
+2.43.0
+
