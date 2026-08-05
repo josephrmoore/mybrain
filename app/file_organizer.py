@@ -130,7 +130,7 @@ def organize_folder(folder_path, rules=None):
     folder_path = os.path.expanduser(folder_path)
     results = []
     for entry in sorted(os.listdir(folder_path)):
-        if entry.startswith("."):
+        if file_utils.is_hidden(entry):
             continue
         full_path = os.path.join(folder_path, entry)
         if not os.path.isfile(full_path):

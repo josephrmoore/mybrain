@@ -36,7 +36,7 @@ def find_duplicates(folder_path):
     size_groups = {}
     for root, dirs, files in os.walk(folder_path):
         for filename in files:
-            if filename.startswith("."):
+            if file_utils.is_hidden(filename):
                 continue
             full_path = os.path.join(root, filename)
             try:

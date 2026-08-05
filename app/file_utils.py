@@ -2,6 +2,14 @@ import os
 from datetime import datetime
 
 
+def is_hidden(filename):
+    """True for dotfiles (.DS_Store, .gitkeep, etc). The one piece of
+    filtering logic every folder-scanning module needs identically —
+    file_organizer, dedup_finder, watcher, and ableton_scanner each had
+    their own copy of this exact check before it was pulled here."""
+    return filename.startswith(".")
+
+
 def get_creation_date(path):
     """Returns a datetime for the file's creation date. Falls back to
     modification time if creation time isn't tracked on this filesystem

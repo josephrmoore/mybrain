@@ -5,6 +5,7 @@ from watchdog.events import FileSystemEventHandler
 import registry
 import module_loader
 import config as core_config
+import file_utils
 
 
 class _ModuleDispatchHandler(FileSystemEventHandler):
@@ -20,7 +21,7 @@ class _ModuleDispatchHandler(FileSystemEventHandler):
 
     def _dispatch(self, path):
         filename = os.path.basename(path)
-        if filename.startswith("."):
+        if file_utils.is_hidden(filename):
             return  # ignore hidden files, same convention as organize_folder
         ext = os.path.splitext(filename)[1]
         matches = registry.find_modules_for_file(file_extension=ext)
