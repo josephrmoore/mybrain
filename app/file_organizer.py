@@ -45,8 +45,8 @@ def validate_categories(categories):
     duplicates = {ext: names for ext, names in seen.items() if len(names) > 1}
     if duplicates:
         for ext, names in duplicates.items():
-            print(f"[file_organizer] WARNING: '{ext}' appears in multiple categories {names} — "
-                  f"'{names[0]}' will always win, the others never will.")
+            events.log("file_organizer", f"WARNING: '{ext}' appears in multiple categories {names} — "
+                       f"'{names[0]}' will always win, the others never will.")
     return duplicates
 
 

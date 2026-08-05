@@ -1,5 +1,7 @@
 import requests
 
+import events
+
 OLLAMA_URL = "http://localhost:11434/api/generate"
 DEFAULT_MODEL = "qwen2.5:7b-instruct"
 TIMEOUT_SECONDS = 30
@@ -22,8 +24,8 @@ def call(prompt, model=DEFAULT_MODEL):
         response.raise_for_status()
         return response.json().get("response")
     except requests.exceptions.ConnectionError:
-        print("[local_llm] Ollama isn't running — skipping local LLM call.")
+        events.log("local_llm", "Ollama isn't running — skipping local LLM call.")
         return None
     except requests.exceptions.RequestException as e:
-        print(f"[local_llm] Local LLM call failed, treating as unavailable: {e}")
+        events.log("local_llm", f"Local LLM call failed, treating as unavailable: {e}")
         return None

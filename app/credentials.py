@@ -1,4 +1,5 @@
 import keyring
+import events
 
 SERVICE_NAME = "core_shell"
 ANTHROPIC_KEY_NAME = "anthropic_api_key"
@@ -11,7 +12,7 @@ def get_anthropic_key():
     try:
         return keyring.get_password(SERVICE_NAME, ANTHROPIC_KEY_NAME)
     except keyring.errors.KeyringError as e:
-        print(f"[credentials] Couldn't reach the credential store, treating as no key set: {e}")
+        events.log("credentials", f"Couldn't reach the credential store, treating as no key set: {e}")
         return None
 
 

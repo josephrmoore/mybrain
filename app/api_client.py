@@ -1,4 +1,5 @@
 import credentials
+import events
 
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_MAX_TOKENS = 1000
@@ -15,7 +16,7 @@ def call(prompt, model=DEFAULT_MODEL, max_tokens=DEFAULT_MAX_TOKENS):
     """
     api_key = credentials.get_anthropic_key()
     if not api_key:
-        print("[api_client] No Anthropic API key configured — skipping call.")
+        events.log("api_client", "No Anthropic API key configured — skipping call.")
         return None
 
     try:
@@ -28,5 +29,5 @@ def call(prompt, model=DEFAULT_MODEL, max_tokens=DEFAULT_MAX_TOKENS):
         )
         return response.content[0].text
     except Exception as e:
-        print(f"[api_client] API call failed, treating as unavailable: {e}")
+        events.log("api_client", f"API call failed, treating as unavailable: {e}")
         return None

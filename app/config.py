@@ -2,6 +2,7 @@ import os
 import yaml
 
 from paths import BASE_DIR
+import events
 
 CONFIG_PATH = os.path.join(BASE_DIR, "config.yaml")
 
@@ -54,7 +55,7 @@ def load_config():
     if not os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, "w") as f:
             f.write(DEFAULT_CONFIG_TEMPLATE)
-        print(f"No config.yaml found — created a default one at {CONFIG_PATH}")
+        events.log("config", f"No config.yaml found — created a default one at {CONFIG_PATH}")
         return dict(DEFAULT_CONFIG)
 
     try:
@@ -63,9 +64,9 @@ def load_config():
         if data is None:
             data = {}
         if not isinstance(data, dict):
-            print(f"WARNING: config.yaml did not parse as a mapping (got {type(data).__name__} instead), using safe defaults instead.")
+            events.log("config", f"WARNING: config.yaml did not parse as a mapping (got {type(data).__name__} instead), using safe defaults instead.")
             return dict(DEFAULT_CONFIG)
         return data
     except yaml.YAMLError as e:
-        print(f"WARNING: config.yaml is malformed, using safe defaults instead. Error: {e}")
+        events.log("config", f"WARNING: config.yaml is malformed, using safe defaults instead. Error: {e}")
         return dict(DEFAULT_CONFIG)

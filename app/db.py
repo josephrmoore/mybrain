@@ -5,6 +5,7 @@ import shutil
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from paths import BASE_DIR
+import events
 
 DB_PATH = os.path.join(BASE_DIR, "core.db")
 MIGRATIONS_DIR = os.path.join(BASE_DIR, "migrations")
@@ -68,7 +69,7 @@ def run_migrations():
                 (filename, datetime.now(timezone.utc).isoformat()),
             )
             conn.commit()
-            print(f"Applied migration: {filename}")
+            events.log("db", f"Applied migration: {filename}")
 
     conn.close()
 
@@ -94,7 +95,7 @@ def backup_on_launch():
             oldest = backups.pop(0)
             os.remove(os.path.join(BACKUPS_DIR, oldest))
     except OSError as e:
-        print(f"[db] WARNING: backup failed, continuing startup without a fresh backup: {e}")
+        events.log("db", f"WARNING: backup failed, continuing startup without a fresh backup: {e}")
 
 
 def _generate_id(conn):

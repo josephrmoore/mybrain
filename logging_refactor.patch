@@ -1,0 +1,308 @@
+From 711d14e824f0fc59985e30884f26b82eb50e600e Mon Sep 17 00:00:00 2001
+From: josephrmoore <josephrmoore@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 06:17:14 +0000
+Subject: [PATCH] Extract events.log(), replace duplicate [module] print
+ formatting
+
+Every module hand-typed its own 'print(f"[modulename] message")' with
+zero enforcement that the format stayed consistent. Centralized into
+events.log(module_name, message) in events.py, which already owns
+console+file logging for the event bus -- same responsibility,
+different message type (ad-hoc diagnostics vs structured events).
+
+Deliberately console-only, same as before -- does not also persist to
+events.log, so this is a pure refactor, not a behavior change for
+message delivery.
+
+Incidental fixes riding along, flagged separately since they DO change
+visible output slightly: config.py's three prints and db.py's
+migration-applied print had no [module] prefix at all (the only ones
+missing it) -- brought in line with the convention everything else
+already followed.
+
+Left alone deliberately: events.py's own event-line echo (structured
+timestamp|event|payload format, not the ad-hoc diagnostic pattern),
+_print_summary's block-report prints in ableton_scanner (deliberate
+structured summary, not ad-hoc), and set_credential.py's prints
+(interactive CLI text for a human running it directly, not module
+diagnostic logging -- different kind, not a duplication).
+
+Verified: py_compile on every touched file, full import-cycle check
+across the whole chain (events/config/credentials/api_client/local_llm/
+registry/router/db/file_utils/file_organizer/dedup_finder all import
+cleanly), and functional regression against ableton_scanner's existing
+fixture set -- identical output to before the refactor.
+---
+ app/api_client.py     |  5 +++--
+ app/config.py         |  7 ++++---
+ app/credentials.py    |  3 ++-
+ app/db.py             |  5 +++--
+ app/events.py         | 22 ++++++++++++++++++++--
+ app/file_organizer.py |  4 ++--
+ app/local_llm.py      |  6 ++++--
+ app/registry.py       |  3 ++-
+ app/router.py         |  2 +-
+ app/watcher.py        |  7 ++++---
+ 10 files changed, 45 insertions(+), 19 deletions(-)
+
+diff --git a/app/api_client.py b/app/api_client.py
+index 5880d38..638d11e 100644
+--- a/app/api_client.py
++++ b/app/api_client.py
+@@ -1,4 +1,5 @@
+ import credentials
++import events
+ 
+ DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+ DEFAULT_MAX_TOKENS = 1000
+@@ -15,7 +16,7 @@ def call(prompt, model=DEFAULT_MODEL, max_tokens=DEFAULT_MAX_TOKENS):
+     """
+     api_key = credentials.get_anthropic_key()
+     if not api_key:
+-        print("[api_client] No Anthropic API key configured — skipping call.")
++        events.log("api_client", "No Anthropic API key configured — skipping call.")
+         return None
+ 
+     try:
+@@ -28,5 +29,5 @@ def call(prompt, model=DEFAULT_MODEL, max_tokens=DEFAULT_MAX_TOKENS):
+         )
+         return response.content[0].text
+     except Exception as e:
+-        print(f"[api_client] API call failed, treating as unavailable: {e}")
++        events.log("api_client", f"API call failed, treating as unavailable: {e}")
+         return None
+diff --git a/app/config.py b/app/config.py
+index b551a7f..730e09e 100644
+--- a/app/config.py
++++ b/app/config.py
+@@ -2,6 +2,7 @@ import os
+ import yaml
+ 
+ from paths import BASE_DIR
++import events
+ 
+ CONFIG_PATH = os.path.join(BASE_DIR, "config.yaml")
+ 
+@@ -54,7 +55,7 @@ def load_config():
+     if not os.path.exists(CONFIG_PATH):
+         with open(CONFIG_PATH, "w") as f:
+             f.write(DEFAULT_CONFIG_TEMPLATE)
+-        print(f"No config.yaml found — created a default one at {CONFIG_PATH}")
++        events.log("config", f"No config.yaml found — created a default one at {CONFIG_PATH}")
+         return dict(DEFAULT_CONFIG)
+ 
+     try:
+@@ -63,9 +64,9 @@ def load_config():
+         if data is None:
+             data = {}
+         if not isinstance(data, dict):
+-            print(f"WARNING: config.yaml did not parse as a mapping (got {type(data).__name__} instead), using safe defaults instead.")
++            events.log("config", f"WARNING: config.yaml did not parse as a mapping (got {type(data).__name__} instead), using safe defaults instead.")
+             return dict(DEFAULT_CONFIG)
+         return data
+     except yaml.YAMLError as e:
+-        print(f"WARNING: config.yaml is malformed, using safe defaults instead. Error: {e}")
++        events.log("config", f"WARNING: config.yaml is malformed, using safe defaults instead. Error: {e}")
+         return dict(DEFAULT_CONFIG)
+diff --git a/app/credentials.py b/app/credentials.py
+index 29b9558..cc004a0 100644
+--- a/app/credentials.py
++++ b/app/credentials.py
+@@ -1,4 +1,5 @@
+ import keyring
++import events
+ 
+ SERVICE_NAME = "core_shell"
+ ANTHROPIC_KEY_NAME = "anthropic_api_key"
+@@ -11,7 +12,7 @@ def get_anthropic_key():
+     try:
+         return keyring.get_password(SERVICE_NAME, ANTHROPIC_KEY_NAME)
+     except keyring.errors.KeyringError as e:
+-        print(f"[credentials] Couldn't reach the credential store, treating as no key set: {e}")
++        events.log("credentials", f"Couldn't reach the credential store, treating as no key set: {e}")
+         return None
+ 
+ 
+diff --git a/app/db.py b/app/db.py
+index bce4681..ed9db50 100644
+--- a/app/db.py
++++ b/app/db.py
+@@ -5,6 +5,7 @@ import shutil
+ from contextlib import contextmanager
+ from datetime import datetime, timezone
+ from paths import BASE_DIR
++import events
+ 
+ DB_PATH = os.path.join(BASE_DIR, "core.db")
+ MIGRATIONS_DIR = os.path.join(BASE_DIR, "migrations")
+@@ -68,7 +69,7 @@ def run_migrations():
+                 (filename, datetime.now(timezone.utc).isoformat()),
+             )
+             conn.commit()
+-            print(f"Applied migration: {filename}")
++            events.log("db", f"Applied migration: {filename}")
+ 
+     conn.close()
+ 
+@@ -94,7 +95,7 @@ def backup_on_launch():
+             oldest = backups.pop(0)
+             os.remove(os.path.join(BACKUPS_DIR, oldest))
+     except OSError as e:
+-        print(f"[db] WARNING: backup failed, continuing startup without a fresh backup: {e}")
++        events.log("db", f"WARNING: backup failed, continuing startup without a fresh backup: {e}")
+ 
+ 
+ def _generate_id(conn):
+diff --git a/app/events.py b/app/events.py
+index 5eea1a5..afa2e72 100644
+--- a/app/events.py
++++ b/app/events.py
+@@ -13,6 +13,24 @@ def subscribe(event_name, callback):
+     _subscribers.setdefault(event_name, []).append(callback)
+ 
+ 
++def log(module_name, message):
++    """
++    Console-only diagnostic/warning logging, in the '[modulename] message'
++    format every module already used, hand-typed separately in each one
++    (api_client, local_llm, credentials, db, registry, router, watcher,
++    config, file_organizer, ableton_scanner). Pulled here since events.py
++    is already the module that owns console+file logging for the event
++    bus -- this is the same responsibility for ad-hoc messages instead of
++    structured events.
++
++    Deliberately console-only, matching prior behavior exactly -- does
++    NOT also write to events.log. These were ephemeral prints before;
++    making them persistent would be a real behavior change, not a
++    refactor, and isn't part of this chunk.
++    """
++    print(f"[{module_name}] {message}")
++
++
+ def emit(event_name, payload=None):
+     """
+     Fires event_name synchronously to all subscribers, in registration order.
+@@ -28,7 +46,7 @@ def emit(event_name, payload=None):
+         try:
+             callback(payload)
+         except Exception as e:
+-            print(f"[events] Subscriber for '{event_name}' raised an error, continuing: {e}")
++            log("events", f"Subscriber for '{event_name}' raised an error, continuing: {e}")
+ 
+ 
+ def _log_event(timestamp, event_name, payload):
+@@ -38,4 +56,4 @@ def _log_event(timestamp, event_name, payload):
+         with open(LOG_PATH, "a") as f:
+             f.write(line + "\n")
+     except OSError as e:
+-        print(f"[events] Couldn't write to events.log, continuing without persisting this entry: {e}")
++        log("events", f"Couldn't write to events.log, continuing without persisting this entry: {e}")
+diff --git a/app/file_organizer.py b/app/file_organizer.py
+index 1623314..1c62884 100644
+--- a/app/file_organizer.py
++++ b/app/file_organizer.py
+@@ -45,8 +45,8 @@ def validate_categories(categories):
+     duplicates = {ext: names for ext, names in seen.items() if len(names) > 1}
+     if duplicates:
+         for ext, names in duplicates.items():
+-            print(f"[file_organizer] WARNING: '{ext}' appears in multiple categories {names} — "
+-                  f"'{names[0]}' will always win, the others never will.")
++            events.log("file_organizer", f"WARNING: '{ext}' appears in multiple categories {names} — "
++                       f"'{names[0]}' will always win, the others never will.")
+     return duplicates
+ 
+ 
+diff --git a/app/local_llm.py b/app/local_llm.py
+index 8767cb9..8b24a65 100644
+--- a/app/local_llm.py
++++ b/app/local_llm.py
+@@ -1,5 +1,7 @@
+ import requests
+ 
++import events
++
+ OLLAMA_URL = "http://localhost:11434/api/generate"
+ DEFAULT_MODEL = "qwen2.5:7b-instruct"
+ TIMEOUT_SECONDS = 30
+@@ -22,8 +24,8 @@ def call(prompt, model=DEFAULT_MODEL):
+         response.raise_for_status()
+         return response.json().get("response")
+     except requests.exceptions.ConnectionError:
+-        print("[local_llm] Ollama isn't running — skipping local LLM call.")
++        events.log("local_llm", "Ollama isn't running — skipping local LLM call.")
+         return None
+     except requests.exceptions.RequestException as e:
+-        print(f"[local_llm] Local LLM call failed, treating as unavailable: {e}")
++        events.log("local_llm", f"Local LLM call failed, treating as unavailable: {e}")
+         return None
+diff --git a/app/registry.py b/app/registry.py
+index 565fc05..b366ba8 100644
+--- a/app/registry.py
++++ b/app/registry.py
+@@ -1,4 +1,5 @@
+ import config
++import events
+ 
+ 
+ def _get_modules():
+@@ -9,7 +10,7 @@ def _get_modules():
+         if isinstance(m, dict):
+             valid_modules.append(m)
+         else:
+-            print(f"[registry] Skipping malformed module entry (not a mapping): {m!r}")
++            events.log("registry", f"Skipping malformed module entry (not a mapping): {m!r}")
+     return valid_modules
+ 
+ 
+diff --git a/app/router.py b/app/router.py
+index d664bc7..6a124dd 100644
+--- a/app/router.py
++++ b/app/router.py
+@@ -28,7 +28,7 @@ def escalate(rule_fn=None, llm_prompt=None, context=None):
+         try:
+             rule_result = rule_fn()
+         except Exception as e:
+-            print(f"[router] rule_fn raised an error, treating as inconclusive and falling through: {e}")
++            events.log("router", f"rule_fn raised an error, treating as inconclusive and falling through: {e}")
+             rule_result = None
+         if rule_result is not None:
+             _log_decision(context, "local", rule_result)
+diff --git a/app/watcher.py b/app/watcher.py
+index 8619d96..731e2fe 100644
+--- a/app/watcher.py
++++ b/app/watcher.py
+@@ -6,6 +6,7 @@ import registry
+ import module_loader
+ import config as core_config
+ import file_utils
++import events
+ 
+ 
+ class _ModuleDispatchHandler(FileSystemEventHandler):
+@@ -29,7 +30,7 @@ class _ModuleDispatchHandler(FileSystemEventHandler):
+             try:
+                 module_loader.invoke(module_entry, path)
+             except Exception as e:
+-                print(f"[watcher] Dispatch to '{module_entry.get('name')}' failed for {path}: {e}")
++                events.log("watcher", f"Dispatch to '{module_entry.get('name')}' failed for {path}: {e}")
+ 
+ 
+ def start_watchers():
+@@ -54,12 +55,12 @@ def start_watchers():
+     observers = []
+     for folder in watched_folders:
+         if not os.path.isdir(folder):
+-            print(f"[watcher] Skipping watch folder that doesn't exist: {folder}")
++            events.log("watcher", f"Skipping watch folder that doesn't exist: {folder}")
+             continue
+         observer = Observer()
+         observer.schedule(handler, folder, recursive=False)
+         observer.start()
+         observers.append(observer)
+-        print(f"[watcher] Watching: {folder}")
++        events.log("watcher", f"Watching: {folder}")
+ 
+     return observers
+-- 
+2.43.0
+

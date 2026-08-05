@@ -1,4 +1,5 @@
 import config
+import events
 
 
 def _get_modules():
@@ -9,7 +10,7 @@ def _get_modules():
         if isinstance(m, dict):
             valid_modules.append(m)
         else:
-            print(f"[registry] Skipping malformed module entry (not a mapping): {m!r}")
+            events.log("registry", f"Skipping malformed module entry (not a mapping): {m!r}")
     return valid_modules
 
 

@@ -6,6 +6,7 @@ import registry
 import module_loader
 import config as core_config
 import file_utils
+import events
 
 
 class _ModuleDispatchHandler(FileSystemEventHandler):
@@ -29,7 +30,7 @@ class _ModuleDispatchHandler(FileSystemEventHandler):
             try:
                 module_loader.invoke(module_entry, path)
             except Exception as e:
-                print(f"[watcher] Dispatch to '{module_entry.get('name')}' failed for {path}: {e}")
+                events.log("watcher", f"Dispatch to '{module_entry.get('name')}' failed for {path}: {e}")
 
 
 def start_watchers():
@@ -54,12 +55,12 @@ def start_watchers():
     observers = []
     for folder in watched_folders:
         if not os.path.isdir(folder):
-            print(f"[watcher] Skipping watch folder that doesn't exist: {folder}")
+            events.log("watcher", f"Skipping watch folder that doesn't exist: {folder}")
             continue
         observer = Observer()
         observer.schedule(handler, folder, recursive=False)
         observer.start()
         observers.append(observer)
-        print(f"[watcher] Watching: {folder}")
+        events.log("watcher", f"Watching: {folder}")
 
     return observers
